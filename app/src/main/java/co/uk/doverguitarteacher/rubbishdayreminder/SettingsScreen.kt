@@ -25,15 +25,12 @@ fun SettingsScreen(
     settingsManager: SettingsManager,
     onNavigateBack: () -> Unit
 ) {
-    // Global settings
+    // --- State variables ---
     var selectedDay by remember { mutableStateOf(settingsManager.getCollectionDay()) }
-    var anchorBin by remember { mutableStateOf(settingsManager.getAnchorBin()) }
+    // The "anchorBin" state is now removed.
     var eveningReminder by remember { mutableStateOf(settingsManager.isEveningReminderEnabled()) }
     var morningReminder by remember { mutableStateOf(settingsManager.isMorningReminderEnabled()) }
-
-    // Per-bin override state holder - Using 'val' for immutability
     data class OverrideState(val enabled: Boolean, val day: DayOfWeek)
-
     val overrideStates = remember {
         BinTypes.ALL_BINS
             .associateWith { bin ->
@@ -43,9 +40,10 @@ fun SettingsScreen(
             .toMutableMap()
     }
 
+    // 1. Use a single Column with no scrolling.
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize() // Fills the whole screen
             .background(Color(0xFF2c3e50))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -57,13 +55,9 @@ fun SettingsScreen(
         SettingRow(label = "My Collection Day Is...") {
             DayOfWeekSelector(selectedDay) { selectedDay = it }
         }
-        Spacer(Modifier.height(16.dp))
-
-        // Global anchor bin
-        SettingRow(label = "Last Week's Collection Was...") {
-            BinTypeSelector(anchorBin) { anchorBin = it }
-        }
         Spacer(Modifier.height(24.dp))
+
+        // 2. The "Last Week's Collection Was..." SettingRow has been completely removed.
 
         // Per‑Bin overrides
         Text("Per‑Bin Collection Days", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -80,7 +74,6 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = state.enabled,
-                            // CORRECTED: Update state with a new instance to trigger recomposition
                             onCheckedChange = { isChecked ->
                                 stateHolder.value = state.copy(enabled = isChecked)
                             },
@@ -94,7 +87,6 @@ fun SettingsScreen(
                     }
                     if (state.enabled) {
                         DayOfWeekSelector(state.day) { newDay ->
-                            // CORRECTED: Update state with a new instance
                             stateHolder.value = state.copy(day = newDay)
                         }
                     }
@@ -111,9 +103,10 @@ fun SettingsScreen(
         Spacer(Modifier.height(8.dp))
         ReminderRow("Morning Reminder (7 AM)", morningReminder) { morningReminder = it }
 
+        // 3. This Spacer will take up all available vertical space, pushing the buttons to the bottom.
         Spacer(Modifier.weight(1f))
 
-        // Action buttons
+        // Action buttons are back at the bottom of the Column
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
                 onClick = onNavigateBack,
@@ -125,11 +118,9 @@ fun SettingsScreen(
             }
             Button(
                 onClick = {
-                    // Save global settings
                     settingsManager.saveCollectionDay(selectedDay)
-                    settingsManager.saveCycleAnchor(anchorBin)
+                    // The saveCycleAnchor call is removed
                     settingsManager.saveReminderSettings(eveningReminder, morningReminder)
-                    // Save per‑bin overrides
                     overrideStates.forEach { (bin, holder) ->
                         val s = holder.value
                         settingsManager.saveBinCollectionDay(bin.id, if (s.enabled) s.day else null)
@@ -145,6 +136,9 @@ fun SettingsScreen(
         }
     }
 }
+
+
+// --- All Helper Composables remain the same ---
 
 @Composable
 fun ReminderRow(label: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
@@ -206,6 +200,7 @@ fun DayOfWeekSelector(selectedDay: DayOfWeek, onDaySelected: (DayOfWeek) -> Unit
     }
 }
 
+// BinTypeSelector is now only used inside the Per-Bin overrides, but we keep it for that
 @Composable
 fun BinTypeSelector(selectedBin: BinType, onBinSelected: (BinType) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
