@@ -7,13 +7,14 @@ class SettingsManager(context: Context) {
     private val prefs = context.getSharedPreferences("app_settings_final_v2", Context.MODE_PRIVATE)
 
     private val KEY_COLLECTION_DAY = "collection_day"
-    private val KEY_ANCHOR_BIN_ID = "anchor_bin_id"
+    private val KEY_ANCHOR_BIN_ID = "anchor_bin_id" // This key is no longer used but can remain
     private val KEY_EVENING_REMINDER_ENABLED = "evening_reminder_enabled"
     private val KEY_MORNING_REMINDER_ENABLED = "morning_reminder_enabled"
 
     fun saveCollectionDay(day: DayOfWeek) =
         prefs.edit().putString(KEY_COLLECTION_DAY, day.name).apply()
 
+    // This function is no longer called from the UI but can be kept if needed elsewhere
     fun saveCycleAnchor(anchorBin: BinType) =
         prefs.edit().putString(KEY_ANCHOR_BIN_ID, anchorBin.id).apply()
 
@@ -52,12 +53,29 @@ class SettingsManager(context: Context) {
         }
     }
 
-    /** Save (or clear if null) a custom collection day override for a bin. */
+    /**
+     * **[CORRECTED]**
+     * Save (or clear if null) a custom collection day override for a bin.
+     */
     fun saveBinCollectionDay(binId: String, day: DayOfWeek?) {
         val key = "collection_day_$binId"
-        prefs.edit().apply {
-            if (day == null) remove(key) else putString(key, day.name)
-            apply()
+        val editor = prefs.edit() // Get the editor first
+        if (day == null) {
+            editor.remove(key)
+        } else {
+            editor.putString(key, day.name)
         }
+        editor.apply() // Commit the changes with a single apply() call
+    }
+
+    /**
+     * **[NEW HELPER FUNCTION]**
+     * Gets the effective collection day for a bin.
+     * It returns the per-bin override if one exists, otherwise it returns the global collection day.
+     */
+    fun getEffectiveCollectionDay(bin: BinType): DayOfWeek {
+        val overrideDay = getBinCollectionDay(bin.id)
+        // If an override day was found, return it. Otherwise, return the global default.
+        return overrideDay ?: getCollectionDay()
     }
 }
