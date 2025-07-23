@@ -1,53 +1,26 @@
-// Location: co/uk/doverguitarteacher/rubbishdayreminder/BinType.kt
 package co.uk.doverguitarteacher.rubbishdayreminder
 
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.graphics.Color
 
+// 1. Add the new "iconResId" property to the data class
 data class BinType(
     val id: String,
     val displayName: String,
     val color: Color,
-    val iconResId: Int
+    @DrawableRes val iconResId: Int // <-- The new property
 )
 
 object BinTypes {
-    val RUBBISH = BinType(
-        id = "RUBBISH",
-        displayName = "Rubbish",
-        color = Color(0xFF0000FF),
-        iconResId = R.drawable.ic_trash_can
-    )
-    // alias for legacy code that still references GENERAL
-    /** @deprecated Use RUBBISH instead */
-    @Deprecated("Use RUBBISH", ReplaceWith("RUBBISH"))
-    val GENERAL = RUBBISH
+    // 2. Add the reference to the drawable for each bin
+    val GENERAL = BinType("general", "Rubbish", Color(0xFF34495e), R.drawable.rubbish)
+    val RECYCLING = BinType("recycling", "Recycling", Color(0xFF3498db), R.drawable.recycling)
+    val GARDEN = BinType("garden", "Garden", Color(0xFF27ae60), R.drawable.garden)
+    val FOOD = BinType("food", "Food", Color(0xFF8e44ad), R.drawable.food)
 
-    val RECYCLING = BinType(
-        id = "RECYCLING",
-        displayName = "Recycling",
-        color = Color(0xFF00FF00),
-        iconResId = R.drawable.ic_recycle_b
-    )
-    val FOOD = BinType(
-        id = "FOOD",
-        displayName = "Food",
-        color = Color(0xFFFF0000),
-        iconResId = R.drawable.ic_food
-    )
-    val GARDEN = BinType(
-        id = "GARDEN",
-        displayName = "Garden",
-        color = Color(0xFFA52A2A),
-        iconResId = R.drawable.ic_garden
-    )
+    val ALL_BINS = listOf(GENERAL, RECYCLING, GARDEN, FOOD)
 
-    val ALL_BINS = listOf(
-        RUBBISH,
-        RECYCLING,
-        FOOD,
-        GARDEN
-    )
-
-    fun findById(id: String?): BinType =
-        ALL_BINS.find { it.id == id } ?: RUBBISH
+    fun findById(id: String?): BinType {
+        return ALL_BINS.find { it.id == id } ?: GENERAL
+    }
 }

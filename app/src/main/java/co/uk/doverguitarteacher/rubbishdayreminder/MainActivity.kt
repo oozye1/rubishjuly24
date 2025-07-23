@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image // <-- Add Image import
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource // <-- Add painterResource import
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,9 +32,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
-//================================================================
-// 1. MAIN ACTIVITY CLASS
-//================================================================
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,11 +59,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
-//================================================================
-// 2. ALL SUPPORTING CODE IS NOW IN THIS FILE
-//================================================================
-
 data class UpcomingCollection(
     val bin: BinType,
     val date: LocalDate
@@ -81,7 +75,6 @@ fun generateUpcomingCollections(settingsManager: SettingsManager): List<Upcoming
     }
     return upcoming.sortedBy { it.date }
 }
-
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -132,6 +125,7 @@ fun MainScreen(
     }
 }
 
+// vvv THIS IS THE ONLY PART THAT HAS CHANGED vvv
 @Composable
 fun CollectionCard(collection: UpcomingCollection) {
     val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM")
@@ -142,11 +136,20 @@ fun CollectionCard(collection: UpcomingCollection) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // 1. ADD THE IMAGE COMPOSABLE
+        Image(
+            painter = painterResource(id = collection.bin.iconResId),
+            contentDescription = collection.bin.displayName, // For accessibility
+            modifier = Modifier.size(120.dp) // Control the size of the icon
+        )
+
+        // 2. ADD A SPACER FOR VISUAL SEPARATION
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
             collection.bin.displayName,
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            // THIS IS THE FIX. The "Color()" wrapper was removed.
             color = collection.bin.color
         )
         Spacer(Modifier.height(16.dp))
