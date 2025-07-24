@@ -39,7 +39,6 @@ android {
 }
 
 dependencies {
-    implementation("nl.dionsegijn:konfetti-compose:2.0.2")
     implementation("androidx.compose.foundation:foundation:1.6.7")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation(libs.androidx.core.ktx)
@@ -60,4 +59,11 @@ dependencies {
 
     // Google Mobile Ads SDK (use the latest available version)
     implementation("com.google.android.gms:play-services-ads:23.0.0")
+
+    // --- ADD THESE LINES TO FIX THE FRAGMENT VERSION ERROR ---
+    // Ensure androidx.fragment is at least 1.3.0. Using a recent stable version.
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
+    // Ensure androidx.activity is at least 1.3.0. Using a recent stable version.
+    implementation("androidx.activity:activity-ktx:1.9.0")
+    // ---------------------------------------------------------
 }
