@@ -2,26 +2,44 @@ package co.uk.doverguitarteacher.rubbishdayreminder
 
 import android.content.Context
 import java.time.DayOfWeek
+import java.time.LocalTime
 
 class SettingsManager(context: Context) {
     private val prefs = context.getSharedPreferences("app_settings_final_v2", Context.MODE_PRIVATE)
 
     private val KEY_COLLECTION_DAY = "collection_day"
-    private val KEY_ANCHOR_BIN_ID = "anchor_bin_id" // This key is no longer used but can remain
+    private val KEY_ANCHOR_BIN_ID = "anchor_bin_id"
     private val KEY_EVENING_REMINDER_ENABLED = "evening_reminder_enabled"
     private val KEY_MORNING_REMINDER_ENABLED = "morning_reminder_enabled"
+
+    // Time storage keys
+    private val KEY_EVENING_REMINDER_HOUR = "evening_reminder_hour"
+    private val KEY_EVENING_REMINDER_MINUTE = "evening_reminder_minute"
+    private val KEY_MORNING_REMINDER_HOUR = "morning_reminder_hour"
+    private val KEY_MORNING_REMINDER_MINUTE = "morning_reminder_minute"
 
     fun saveCollectionDay(day: DayOfWeek) =
         prefs.edit().putString(KEY_COLLECTION_DAY, day.name).apply()
 
-    // This function is no longer called from the UI but can be kept if needed elsewhere
     fun saveCycleAnchor(anchorBin: BinType) =
         prefs.edit().putString(KEY_ANCHOR_BIN_ID, anchorBin.id).apply()
 
-    fun saveReminderSettings(evening: Boolean, morning: Boolean) {
+    /**
+     * Persist booleans AND chosen times.
+     */
+    fun saveReminderSettings(
+        eveningEnabled: Boolean,
+        morningEnabled: Boolean,
+        eveningTime: LocalTime,
+        morningTime: LocalTime
+    ) {
         prefs.edit()
-            .putBoolean(KEY_EVENING_REMINDER_ENABLED, evening)
-            .putBoolean(KEY_MORNING_REMINDER_ENABLED, morning)
+            .putBoolean(KEY_EVENING_REMINDER_ENABLED, eveningEnabled)
+            .putBoolean(KEY_MORNING_REMINDER_ENABLED, morningEnabled)
+            .putInt(KEY_EVENING_REMINDER_HOUR, eveningTime.hour)
+            .putInt(KEY_EVENING_REMINDER_MINUTE, eveningTime.minute)
+            .putInt(KEY_MORNING_REMINDER_HOUR, morningTime.hour)
+            .putInt(KEY_MORNING_REMINDER_MINUTE, morningTime.minute)
             .apply()
     }
 
@@ -42,40 +60,43 @@ class SettingsManager(context: Context) {
     fun isMorningReminderEnabled(): Boolean =
         prefs.getBoolean(KEY_MORNING_REMINDER_ENABLED, false)
 
+    // Retrieve persisted times (defaults: evening 19:00, morning 07:00)
+    fun getEveningReminderTime(): LocalTime =
+        LocalTime.of(
+            prefs.getInt(KEY_EVENING_REMINDER_HOUR, 19),
+            prefs.getInt(KEY_EVENING_REMINDER_MINUTE, 0)
+        )
+
+    fun getMorningReminderTime(): LocalTime =
+        LocalTime.of(
+            prefs.getInt(KEY_MORNING_REMINDER_HOUR, 7),
+            prefs.getInt(KEY_MORNING_REMINDER_MINUTE, 0)
+        )
+
     /** Retrieve a custom collection day for a specific bin type, or null if none. */
     fun getBinCollectionDay(binId: String): DayOfWeek? {
         val key = "collection_day_$binId"
         val stored = prefs.getString(key, null) ?: return null
         return try {
             DayOfWeek.valueOf(stored)
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
 
-    /**
-     * **[CORRECTED]**
-     * Save (or clear if null) a custom collection day override for a bin.
-     */
     fun saveBinCollectionDay(binId: String, day: DayOfWeek?) {
         val key = "collection_day_$binId"
-        val editor = prefs.edit() // Get the editor first
+        val editor = prefs.edit()
         if (day == null) {
             editor.remove(key)
         } else {
             editor.putString(key, day.name)
         }
-        editor.apply() // Commit the changes with a single apply() call
+        editor.apply()
     }
 
-    /**
-     * **[NEW HELPER FUNCTION]**
-     * Gets the effective collection day for a bin.
-     * It returns the per-bin override if one exists, otherwise it returns the global collection day.
-     */
     fun getEffectiveCollectionDay(bin: BinType): DayOfWeek {
         val overrideDay = getBinCollectionDay(bin.id)
-        // If an override day was found, return it. Otherwise, return the global default.
         return overrideDay ?: getCollectionDay()
     }
 }

@@ -26,29 +26,48 @@ android {
             )
         }
     }
+
+    // Use Java 17 for current Compose + Material3
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
+
     buildFeatures {
         compose = true
     }
 }
 
 dependencies {
-    implementation("androidx.compose.foundation:foundation:1.6.7")
-    implementation("androidx.navigation:navigation-compose:2.7.7")
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
+    // Compose BOM from version catalog
     implementation(platform(libs.androidx.compose.bom))
+
+    // Core Compose libs (from BOM)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
+
+    // Foundation (remove the hard‑coded 1.6.7 version; BOM supplies the version)
+    implementation("androidx.compose.foundation:foundation")
+
+    // ***** IMPORTANT: Explicit Material3 1.2.1 for TimePicker APIs *****
+    implementation("androidx.compose.material3:material3:1.2.1")
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    // Google Mobile Ads
+    implementation("com.google.android.gms:play-services-ads:23.0.0")
+
+    // Fragment / Activity (fine to keep)
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
+    implementation("androidx.activity:activity-ktx:1.9.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -56,14 +75,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
-    // Google Mobile Ads SDK (use the latest available version)
-    implementation("com.google.android.gms:play-services-ads:23.0.0")
-
-    // --- ADD THESE LINES TO FIX THE FRAGMENT VERSION ERROR ---
-    // Ensure androidx.fragment is at least 1.3.0. Using a recent stable version.
-    implementation("androidx.fragment:fragment-ktx:1.8.6")
-    // Ensure androidx.activity is at least 1.3.0. Using a recent stable version.
-    implementation("androidx.activity:activity-ktx:1.9.0")
-    // ---------------------------------------------------------
 }

@@ -1,4 +1,3 @@
-// Location: co.uk.doverguitarteacher.rubbishdayreminder/AlarmScheduler.kt
 package co.uk.doverguitarteacher.rubbishdayreminder
 
 import android.app.AlarmManager
@@ -18,13 +17,14 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 object AlarmScheduler {
     const val EVENING_REQUEST_CODE = 101
     const val MORNING_REQUEST_CODE = 102
 
-    private const val CHANNEL_ID = "bin_day_channel"            // With sound
-    private const val PLAYBACK_CHANNEL_ID = "bin_day_playback"  // Silent foreground service channel
+    private const val CHANNEL_ID = "bin_day_channel"
+    private const val PLAYBACK_CHANNEL_ID = "bin_day_playback"
 
     fun scheduleAlarms(context: Context, settingsManager: SettingsManager) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -36,18 +36,30 @@ object AlarmScheduler {
             calculateBinForWeek(settingsManager, settingsManager.getCollectionDay(), 0)
         val binName = upcomingBin.displayName
 
+        val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+
         if (settingsManager.isEveningReminderEnabled()) {
-            val eveningTime = upcomingDate.minusDays(1).atTime(19, 0)
-            val eveningIntent =
-                createPendingIntent(context, EVENING_REQUEST_CODE, binName, "This Evening")
-            setExactAlarm(alarmManager, eveningTime, eveningIntent)
+            val eveningLocalTime = settingsManager.getEveningReminderTime()
+            val eveningDateTime = upcomingDate.minusDays(1).atTime(eveningLocalTime)
+            val eveningIntent = createPendingIntent(
+                context,
+                EVENING_REQUEST_CODE,
+                binName,
+                "at ${eveningLocalTime.format(timeFormatter)}"
+            )
+            setExactAlarm(alarmManager, eveningDateTime, eveningIntent)
         }
 
         if (settingsManager.isMorningReminderEnabled()) {
-            val morningTime = upcomingDate.atTime(7, 0)
-            val morningIntent =
-                createPendingIntent(context, MORNING_REQUEST_CODE, binName, "This Morning")
-            setExactAlarm(alarmManager, morningTime, morningIntent)
+            val morningLocalTime = settingsManager.getMorningReminderTime()
+            val morningDateTime = upcomingDate.atTime(morningLocalTime)
+            val morningIntent = createPendingIntent(
+                context,
+                MORNING_REQUEST_CODE,
+                binName,
+                "at ${morningLocalTime.format(timeFormatter)}"
+            )
+            setExactAlarm(alarmManager, morningDateTime, morningIntent)
         }
     }
 
@@ -90,15 +102,10 @@ object AlarmScheduler {
         )
     }
 
-    /**
-     * Creates both the sound channel (for the alarm notification) and a silent channel
-     * for the foreground service that plays the sound multiple times.
-     */
     fun createNotificationChannel(context: Context) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Channel with custom sound (fires once when notification posted)
         val soundUri =
             Uri.parse("android.resource://${context.packageName}/${R.raw.alert_horn}")
         val soundChannel = NotificationChannel(
@@ -117,7 +124,6 @@ object AlarmScheduler {
             enableVibration(true)
         }
 
-        // Silent channel for foreground service playback (no extra sound)
         val playbackChannel = NotificationChannel(
             PLAYBACK_CHANNEL_ID,
             "Bin Day Playback",
@@ -163,12 +169,6 @@ object AlarmScheduler {
     }
 }
 
-/**
- * BroadcastReceiver triggered by AlarmManager.
- * Posts the initial notification (which plays alert_horn once via channel)
- * then starts a foreground service to play the sound 5 total times.
- * Also broadcasts an intent so the visible UI can show confetti.
- */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val binName = intent.getStringExtra("EXTRA_BIN_NAME") ?: "the bins"
@@ -177,37 +177,28 @@ class AlarmReceiver : BroadcastReceiver() {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Post initial notification (channel tone plays once here)
         notificationManager.notify(
             System.currentTimeMillis().toInt(),
             AlarmScheduler.buildAlarmNotification(context, binName, timeOfDay)
         )
 
-        // Start service to play sound 5 times
         val serviceIntent = Intent(context, AlarmSoundService::class.java).apply {
             putExtra("EXTRA_BIN_NAME", binName)
             putExtra("EXTRA_TIME_OF_DAY", timeOfDay)
-            putExtra("EXTRA_REPEAT_COUNT", 5) // total plays
+            putExtra("EXTRA_REPEAT_COUNT", 5)
         }
         ContextCompat.startForegroundService(context, serviceIntent)
 
-        // Notify UI (if open) to trigger confetti
         context.sendBroadcast(
             Intent("co.uk.doverguitarteacher.rubbishdayreminder.ALARM_UI")
         )
 
-        // Re-schedule next alarms
         val settingsManager = SettingsManager(context)
         AlarmScheduler.scheduleAlarms(context, settingsManager)
     }
 }
 
-/**
- * Foreground service that plays the alert MP3 repeatedly (N times).
- * We manually loop so we can stop automatically after the desired count.
- */
 class AlarmSoundService : Service() {
-
     private var mediaPlayer: MediaPlayer? = null
     private var remainingPlays: Int = 0
     private var binName: String = "the bins"
@@ -219,7 +210,6 @@ class AlarmSoundService : Service() {
         val total = intent?.getIntExtra("EXTRA_REPEAT_COUNT", 5) ?: 5
         remainingPlays = total
 
-        // Start foreground immediately
         startForeground(
             1,
             AlarmScheduler.buildPlaybackNotification(
@@ -240,14 +230,11 @@ class AlarmSoundService : Service() {
             stopSelf()
             return
         }
-
-        // Release previous instance if any
         mediaPlayer?.release()
         mediaPlayer = MediaPlayer.create(this, R.raw.alert_horn).apply {
             setOnCompletionListener {
                 remainingPlays--
                 if (remainingPlays > 0) {
-                    // Update notification progress
                     val played = total - remainingPlays + 1
                     val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     nm.notify(
