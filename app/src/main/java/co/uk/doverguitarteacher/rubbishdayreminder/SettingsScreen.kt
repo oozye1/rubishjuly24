@@ -25,11 +25,10 @@ fun SettingsScreen(
     settingsManager: SettingsManager,
     onNavigateBack: () -> Unit
 ) {
-    // --- State variables ---
     var selectedDay by remember { mutableStateOf(settingsManager.getCollectionDay()) }
-    // The "anchorBin" state is now removed.
     var eveningReminder by remember { mutableStateOf(settingsManager.isEveningReminderEnabled()) }
     var morningReminder by remember { mutableStateOf(settingsManager.isMorningReminderEnabled()) }
+
     data class OverrideState(val enabled: Boolean, val day: DayOfWeek)
     val overrideStates = remember {
         BinTypes.ALL_BINS
@@ -40,10 +39,9 @@ fun SettingsScreen(
             .toMutableMap()
     }
 
-    // 1. Use a single Column with no scrolling.
     Column(
         modifier = Modifier
-            .fillMaxSize() // Fills the whole screen
+            .fillMaxSize()
             .background(Color(0xFF2c3e50))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -51,27 +49,30 @@ fun SettingsScreen(
         Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(24.dp))
 
-        // Global collection day
         SettingRow(label = "My Collection Day Is...") {
-            DayOfWeekSelector(selectedDay) { selectedDay = it }
+            DayOfWeekSelector(selectedDay = selectedDay, onDaySelected = { selectedDay = it })
         }
         Spacer(Modifier.height(24.dp))
 
-        // 2. The "Last Week's Collection Was..." SettingRow has been completely removed.
-
-        // Per‑Bin overrides
         Text("Per‑Bin Collection Days", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(16.dp))
+
         BinTypes.ALL_BINS.forEach { bin ->
             val stateHolder = overrideStates[bin]!!
             val state = stateHolder.value
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Checkbox(
                             checked = state.enabled,
                             onCheckedChange = { isChecked ->
@@ -86,9 +87,14 @@ fun SettingsScreen(
                         Text(bin.displayName, color = Color.White, fontSize = 16.sp)
                     }
                     if (state.enabled) {
-                        DayOfWeekSelector(state.day) { newDay ->
-                            stateHolder.value = state.copy(day = newDay)
-                        }
+                        Spacer(Modifier.width(16.dp))
+                        DayOfWeekSelector(
+                            selectedDay = state.day,
+                            onDaySelected = { newDay -> stateHolder.value = state.copy(day = newDay) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .widthIn(min = 200.dp) // full-width relative; ensures all selectors same size and not crushing text
+                        )
                     }
                 }
             }
@@ -96,21 +102,20 @@ fun SettingsScreen(
 
         Divider(Modifier.padding(vertical = 24.dp), color = Color.Gray)
 
-        // Reminders
         Text("Reminders", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.height(16.dp))
         ReminderRow("Evening Reminder (7 PM)", eveningReminder) { eveningReminder = it }
         Spacer(Modifier.height(8.dp))
         ReminderRow("Morning Reminder (7 AM)", morningReminder) { morningReminder = it }
 
-        // 3. This Spacer will take up all available vertical space, pushing the buttons to the bottom.
         Spacer(Modifier.weight(1f))
 
-        // Action buttons are back at the bottom of the Column
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
                 onClick = onNavigateBack,
-                modifier = Modifier.weight(1f).height(50.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))
             ) {
@@ -119,7 +124,6 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     settingsManager.saveCollectionDay(selectedDay)
-                    // The saveCycleAnchor call is removed
                     settingsManager.saveReminderSettings(eveningReminder, morningReminder)
                     overrideStates.forEach { (bin, holder) ->
                         val s = holder.value
@@ -127,7 +131,9 @@ fun SettingsScreen(
                     }
                     onNavigateBack()
                 },
-                modifier = Modifier.weight(1f).height(50.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2ecc71))
             ) {
@@ -136,9 +142,6 @@ fun SettingsScreen(
         }
     }
 }
-
-
-// --- All Helper Composables remain the same ---
 
 @Composable
 fun ReminderRow(label: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
@@ -170,23 +173,35 @@ fun SettingRow(label: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-fun DayOfWeekSelector(selectedDay: DayOfWeek, onDaySelected: (DayOfWeek) -> Unit) {
+fun DayOfWeekSelector(
+    selectedDay: DayOfWeek,
+    onDaySelected: (DayOfWeek) -> Unit,
+    modifier: Modifier = Modifier
+) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
+    Box(modifier = modifier) {
         Row(
             Modifier
-                .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .border(1.dp, Color.Gray, RoundedCornerShape(12.dp))
                 .clickable { expanded = true }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(selectedDay.getDisplayName(TextStyle.FULL, Locale.getDefault()), color = Color.White, fontSize = 16.sp)
+            Text(
+                selectedDay.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                color = Color.White,
+                fontSize = 16.sp
+            )
             Icon(Icons.Default.ArrowDropDown, contentDescription = "Select day", tint = Color.White)
         }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color(0xFF34495e))) {
+        DropdownMenu(
+            expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color(0xFF34495e))
+        ) {
             DayOfWeek.values().forEach { day ->
                 DropdownMenuItem(
                     text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault()), color = Color.White) },
@@ -200,7 +215,6 @@ fun DayOfWeekSelector(selectedDay: DayOfWeek, onDaySelected: (DayOfWeek) -> Unit
     }
 }
 
-// BinTypeSelector is now only used inside the Per-Bin overrides, but we keep it for that
 @Composable
 fun BinTypeSelector(selectedBin: BinType, onBinSelected: (BinType) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
@@ -218,7 +232,11 @@ fun BinTypeSelector(selectedBin: BinType, onBinSelected: (BinType) -> Unit) {
             Text(selectedBin.displayName, color = Color.White, fontSize = 16.sp)
             Icon(Icons.Default.ArrowDropDown, contentDescription = "Open bin selector", tint = Color.White)
         }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color(0xFF34495e))) {
+        DropdownMenu(
+            expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color(0xFF34495e))
+        ) {
             BinTypes.ALL_BINS.forEach { bin ->
                 DropdownMenuItem(
                     text = { Text(bin.displayName, color = Color.White) },

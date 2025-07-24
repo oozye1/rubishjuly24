@@ -14,7 +14,6 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -40,6 +39,7 @@ android {
 }
 
 dependencies {
+    implementation("nl.dionsegijn:konfetti-compose:2.0.2")
     implementation("androidx.compose.foundation:foundation:1.6.7")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation(libs.androidx.core.ktx)
@@ -57,4 +57,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Google Mobile Ads SDK (use the latest available version)
+    implementation("com.google.android.gms:play-services-ads:23.0.0")
 }

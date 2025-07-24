@@ -1,3 +1,13 @@
+
+
+
+
 <resources>
-    <string name="app_name">Rubbish Day Reminder</string>
+<string name="app_name">Rubbish Day Reminder</string>
+
+<!-- AdMob App ID -->
+<string name="admob_app_id">ca-app-pub-1281101209517101~2760561480</string>
+
+<!-- AdMob Banner Ad Unit ID -->
+<string name="ad_unit_id_banner">ca-app-pub-3940256099942544/2247696110</string>
 </resources>
