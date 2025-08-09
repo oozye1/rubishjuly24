@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -61,7 +63,7 @@ fun SettingsScreen(
     }
 
     val timeFormatter = remember { DateTimeFormatter.ofPattern("h:mm a") }
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("EEE d MMM yyyy") }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("EEE d MMM") }
     val ctx = LocalContext.current
 
     fun showTimePicker(initial: LocalTime, onResult: (LocalTime) -> Unit) {
@@ -74,161 +76,183 @@ fun SettingsScreen(
             base.year, base.monthValue - 1, base.dayOfMonth).show()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF2c3e50))
-            .padding(horizontal = 24.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Spacer(Modifier.height(12.dp))
+    Scaffold(
+        containerColor = Color(0xFF2c3e50),
+        bottomBar = {
+            Surface(tonalElevation = 2.dp, color = Color(0xFF223242)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))
+                    ) { Text("Cancel") }
 
-        SettingRow(label = "Default Collection Day") {
-            DayOfWeekSelector(selectedDay = selectedDay, onDaySelected = { selectedDay = it })
-        }
-        Spacer(Modifier.height(16.dp))
-
-        Text("Per-Bin Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Spacer(Modifier.height(8.dp))
-
-        BinTypes.ALL_BINS.forEach { bin ->
-            val holder = perBinState[bin]!!
-            val s = holder.value
-
-            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Checkbox(
-                            checked = s.enabledOverrideDay,
-                            onCheckedChange = { chk -> holder.value = s.copy(enabledOverrideDay = chk) },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF2ecc71), uncheckedColor = Color.LightGray)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(bin.displayName, color = Color.White, fontSize = 16.sp)
-                    }
-                    if (s.enabledOverrideDay) {
-                        Spacer(Modifier.width(16.dp))
-                        DayOfWeekSelector(
-                            selectedDay = s.day,
-                            onDaySelected = { d -> holder.value = s.copy(day = d) },
-                            modifier = Modifier.weight(1f).widthIn(min = 200.dp)
-                        )
-                    }
+                    Button(
+                        onClick = {
+                            settingsManager.saveCollectionDay(selectedDay)
+                            settingsManager.saveReminderSettings(
+                                eveningEnabled = eveningReminder,
+                                morningEnabled = morningReminder,
+                                eveningTime = eveningTime,
+                                morningTime = morningTime
+                            )
+                            perBinState.forEach { (bin, holder) ->
+                                val s = holder.value
+                                settingsManager.saveBinCollectionDay(bin.id, if (s.enabledOverrideDay) s.day else null)
+                                settingsManager.saveBinFrequency(bin.id, s.frequency)
+                                settingsManager.saveBinAnchorDate(
+                                    bin.id,
+                                    if (s.frequency == Frequency.FORTNIGHTLY) s.anchorDate else null
+                                )
+                            }
+                            AlarmScheduler.scheduleAlarms(appContext, settingsManager)
+                            onNavigateBack()
+                        },
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2ecc71))
+                    ) { Text("Save") }
                 }
-
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    Text("Frequency", color = Color(0xFFbdc3c7), fontSize = 14.sp, modifier = Modifier.width(90.dp))
-                    FrequencySelector(selected = s.frequency, onSelected = { f -> holder.value = s.copy(frequency = f) })
-                    Spacer(Modifier.width(12.dp))
-                    if (s.frequency == Frequency.FORTNIGHTLY) {
-                        val label = s.anchorDate?.format(dateFormatter) ?: "Pick start date"
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                                .clickable { showDatePicker(s.anchorDate) { picked -> holder.value = s.copy(anchorDate = picked) } }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) { Text(label, color = Color.White, fontSize = 14.sp) }
-                    }
-                }
-                Divider(Modifier.padding(top = 10.dp), color = Color(0xFF42576B))
             }
         }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 88.dp, top = 12.dp)
+        ) {
+            item {
+                Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
 
-        Spacer(Modifier.height(16.dp))
-        Divider(color = Color.Gray)
-        Spacer(Modifier.height(8.dp))
-
-        Text("Reminders", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Spacer(Modifier.height(8.dp))
-
-        ReminderRow(
-            label = "Night Before Reminder",
-            time = eveningTime,
-            isChecked = eveningReminder,
-            onCheckedChange = { eveningReminder = it },
-            onTimeClicked = { if (eveningReminder) showTimePicker(eveningTime) { eveningTime = it } },
-            enabled = eveningReminder,
-            timeFormatter = timeFormatter
-        )
-        Spacer(Modifier.height(6.dp))
-        ReminderRow(
-            label = "Morning Reminder",
-            time = morningTime,
-            isChecked = morningReminder,
-            onCheckedChange = { morningReminder = it },
-            onTimeClicked = { if (morningReminder) showTimePicker(morningTime) { morningTime = it } },
-            enabled = morningReminder,
-            timeFormatter = timeFormatter
-        )
-
-        Spacer(Modifier.weight(1f))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(
-                onClick = onNavigateBack,
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))
-            ) { Text("Cancel") }
-
-            Button(
-                onClick = {
-                    // Save global default day + reminders
-                    settingsManager.saveCollectionDay(selectedDay)
-                    settingsManager.saveReminderSettings(
-                        eveningEnabled = eveningReminder,
-                        morningEnabled = morningReminder,
-                        eveningTime = eveningTime,
-                        morningTime = morningTime
-                    )
-                    // Save per-bin config
-                    perBinState.forEach { (bin, holder) ->
-                        val s = holder.value
-                        settingsManager.saveBinCollectionDay(bin.id, if (s.enabledOverrideDay) s.day else null)
-                        settingsManager.saveBinFrequency(bin.id, s.frequency)
-                        settingsManager.saveBinAnchorDate(bin.id, if (s.frequency == Frequency.FORTNIGHTLY) s.anchorDate else null)
+            item {
+                SectionCard {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Default collection day", color = Color(0xFFbdc3c7), fontSize = 13.sp)
+                        Spacer(Modifier.weight(1f))
+                        DayOfWeekCompactDropdown(selectedDay) { selectedDay = it }
                     }
-                    // Re-arm alarms (use hoisted appContext – avoids @Composable-in-non-composable error)
-                    AlarmScheduler.scheduleAlarms(appContext, settingsManager)
-                    onNavigateBack()
-                },
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2ecc71))
-            ) { Text("Save") }
+                }
+            }
+
+            item {
+                Text("Per-bin settings", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+
+            items(BinTypes.ALL_BINS) { bin ->
+                val holder = perBinState[bin]!!
+                val s = holder.value
+                SectionCard {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(bin.displayName, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        CompactSwitchLabel(
+                            label = "Override day",
+                            checked = s.enabledOverrideDay,
+                            onCheckedChange = { holder.value = s.copy(enabledOverrideDay = it) }
+                        )
+                    }
+                    if (s.enabledOverrideDay) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Day", color = Color(0xFFbdc3c7), fontSize = 12.sp)
+                            Spacer(Modifier.width(10.dp))
+                            DayOfWeekCompactDropdown(s.day) { d -> holder.value = s.copy(day = d) }
+                        }
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Frequency", color = Color(0xFFbdc3c7), fontSize = 12.sp)
+                        Spacer(Modifier.width(10.dp))
+                        FrequencyCompactDropdown(s.frequency) { f -> holder.value = s.copy(frequency = f) }
+                        if (s.frequency == Frequency.FORTNIGHTLY) {
+                            Spacer(Modifier.width(10.dp))
+                            val label = s.anchorDate?.format(dateFormatter) ?: "Start date"
+                            CompactChip(label) {
+                                showDatePicker(s.anchorDate) { picked -> holder.value = s.copy(anchorDate = picked) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text("Reminders", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+
+            item {
+                SectionCard {
+                    CompactReminderRow(
+                        label = "Night before",
+                        time = eveningTime,
+                        isChecked = eveningReminder,
+                        onCheckedChange = { eveningReminder = it },
+                        onPickTime = { if (eveningReminder) showTimePicker(eveningTime) { eveningTime = it } },
+                        timeFormatter = timeFormatter
+                    )
+                    Divider(color = Color(0xFF3A5166))
+                    CompactReminderRow(
+                        label = "Morning",
+                        time = morningTime,
+                        isChecked = morningReminder,
+                        onCheckedChange = { morningReminder = it },
+                        onPickTime = { if (morningReminder) showTimePicker(morningTime) { morningTime = it } },
+                        timeFormatter = timeFormatter
+                    )
+                }
+            }
         }
     }
 }
 
+/* ---------- Material3 Card-based compact UI ---------- */
+
 @Composable
-fun ReminderRow(
-    label: String,
-    time: LocalTime,
-    isChecked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    onTimeClicked: () -> Unit,
-    enabled: Boolean,
-    timeFormatter: DateTimeFormatter
-) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(label, color = Color.White, fontSize = 16.sp)
-            Box(
-                modifier = Modifier
-                    .padding(top = 2.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                    .clickable(enabled) { onTimeClicked() }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(text = time.format(timeFormatter), color = if (enabled) Color.White else Color.Gray, fontSize = 14.sp)
-            }
-        }
+private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF263645)),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun CompactChip(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, Color(0xFF4C657C), RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(text, color = Color.White, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun CompactSwitchLabel(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Color(0xFFbdc3c7), fontSize = 12.sp)
+        Spacer(Modifier.width(6.dp))
         Switch(
-            checked = isChecked,
+            checked = checked,
             onCheckedChange = onCheckedChange,
+            modifier = Modifier.height(18.dp),
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = Color(0xFF2ecc71),
@@ -240,35 +264,29 @@ fun ReminderRow(
 }
 
 @Composable
-fun SettingRow(label: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(label, color = Color(0xFFbdc3c7), fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
-        content()
-    }
-}
-
-@Composable
-fun DayOfWeekSelector(selectedDay: DayOfWeek, onDaySelected: (DayOfWeek) -> Unit, modifier: Modifier = Modifier) {
+private fun DropdownBox(currentText: String, items: List<String>, onSelect: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
-        Row(
-            Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .border(1.dp, Color.Gray, RoundedCornerShape(12.dp))
-                .clickable { expanded = true }
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(selectedDay.getDisplayName(TextStyle.FULL, Locale.getDefault()), color = Color.White, fontSize = 16.sp)
-            Icon(Icons.Default.ArrowDropDown, contentDescription = "Select day", tint = Color.White)
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, Color(0xFF4C657C), RoundedCornerShape(8.dp))
+            .clickable { expanded = true }
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(currentText, color = Color.White, fontSize = 12.sp)
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Default.ArrowDropDown, null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color(0xFF34495e))) {
-            DayOfWeek.values().forEach { day ->
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = Color(0xFF34495e)
+        ) {
+            items.forEachIndexed { index, txt ->
                 DropdownMenuItem(
-                    text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault()), color = Color.White) },
-                    onClick = { onDaySelected(day); expanded = false }
+                    text = { Text(txt, color = Color.White, fontSize = 13.sp) },
+                    onClick = { onSelect(index); expanded = false }
                 )
             }
         }
@@ -276,29 +294,47 @@ fun DayOfWeekSelector(selectedDay: DayOfWeek, onDaySelected: (DayOfWeek) -> Unit
 }
 
 @Composable
-fun FrequencySelector(selected: Frequency, onSelected: (Frequency) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    val label = if (selected == Frequency.WEEKLY) "Weekly" else "Fortnightly"
-    Box {
-        Row(
-            Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                .clickable { expanded = true }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color.White, fontSize = 14.sp)
-            Icon(Icons.Default.ArrowDropDown, contentDescription = "Open", tint = Color.White)
-        }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color(0xFF34495e))) {
-            Frequency.values().forEach { f ->
-                DropdownMenuItem(
-                    text = { Text(if (f == Frequency.WEEKLY) "Weekly" else "Fortnightly", color = Color.White) },
-                    onClick = { onSelected(f); expanded = false }
-                )
-            }
-        }
+private fun DayOfWeekCompactDropdown(selected: DayOfWeek, onSelected: (DayOfWeek) -> Unit) {
+    val names = remember {
+        DayOfWeek.values().map { it.getDisplayName(TextStyle.FULL, Locale.getDefault()) }
+    }
+    DropdownBox(
+        currentText = selected.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+        items = names
+    ) { idx -> onSelected(DayOfWeek.values()[idx]) }
+}
+
+@Composable
+private fun FrequencyCompactDropdown(selected: Frequency, onSelected: (Frequency) -> Unit) {
+    val items = listOf("Weekly", "Fortnightly")
+    val current = if (selected == Frequency.WEEKLY) "Weekly" else "Fortnightly"
+    DropdownBox(currentText = current, items = items) { idx ->
+        onSelected(if (idx == 0) Frequency.WEEKLY else Frequency.FORTNIGHTLY)
+    }
+}
+
+@Composable
+private fun CompactReminderRow(
+    label: String,
+    time: LocalTime,
+    isChecked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onPickTime: () -> Unit,
+    timeFormatter: DateTimeFormatter
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        CompactChip(time.format(timeFormatter)) { if (isChecked) onPickTime() }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = isChecked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF2ecc71),
+                uncheckedThumbColor = Color.LightGray,
+                uncheckedTrackColor = Color.Gray
+            )
+        )
     }
 }
