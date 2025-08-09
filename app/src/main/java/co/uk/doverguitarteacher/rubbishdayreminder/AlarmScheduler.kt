@@ -5,16 +5,11 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.net.Uri
-import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -32,34 +27,29 @@ object AlarmScheduler {
         cancelAlarm(context, EVENING_REQUEST_CODE)
         cancelAlarm(context, MORNING_REQUEST_CODE)
 
-        val (upcomingBin, upcomingDate) =
-            calculateBinForWeek(settingsManager, settingsManager.getCollectionDay(), 0)
-        val binName = upcomingBin.displayName
-
+        // NEW LOGIC: get the earliest upcoming bin/date using per-bin Weekly/Fortnightly + Anchor
+        val (bin, upcomingDate) = nextUpcomingBinAndDate(settingsManager)
+        val binName = bin.displayName
         val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
         if (settingsManager.isEveningReminderEnabled()) {
-            val eveningLocalTime = settingsManager.getEveningReminderTime()
-            val eveningDateTime = upcomingDate.minusDays(1).atTime(eveningLocalTime)
-            val eveningIntent = createPendingIntent(
-                context,
-                EVENING_REQUEST_CODE,
-                binName,
-                "at ${eveningLocalTime.format(timeFormatter)}"
+            val t = settingsManager.getEveningReminderTime()
+            val runAt = upcomingDate.minusDays(1).atTime(t)
+            setExactAlarm(
+                alarmManager,
+                runAt,
+                createPendingIntent(context, EVENING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}")
             )
-            setExactAlarm(alarmManager, eveningDateTime, eveningIntent)
         }
 
         if (settingsManager.isMorningReminderEnabled()) {
-            val morningLocalTime = settingsManager.getMorningReminderTime()
-            val morningDateTime = upcomingDate.atTime(morningLocalTime)
-            val morningIntent = createPendingIntent(
-                context,
-                MORNING_REQUEST_CODE,
-                binName,
-                "at ${morningLocalTime.format(timeFormatter)}"
+            val t = settingsManager.getMorningReminderTime()
+            val runAt = upcomingDate.atTime(t)
+            setExactAlarm(
+                alarmManager,
+                runAt,
+                createPendingIntent(context, MORNING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}")
             )
-            setExactAlarm(alarmManager, morningDateTime, morningIntent)
         }
     }
 
@@ -167,100 +157,4 @@ object AlarmScheduler {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
-}
-
-class AlarmReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val binName = intent.getStringExtra("EXTRA_BIN_NAME") ?: "the bins"
-        val timeOfDay = intent.getStringExtra("EXTRA_TIME_OF_DAY") ?: "soon"
-
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        notificationManager.notify(
-            System.currentTimeMillis().toInt(),
-            AlarmScheduler.buildAlarmNotification(context, binName, timeOfDay)
-        )
-
-        val serviceIntent = Intent(context, AlarmSoundService::class.java).apply {
-            putExtra("EXTRA_BIN_NAME", binName)
-            putExtra("EXTRA_TIME_OF_DAY", timeOfDay)
-            putExtra("EXTRA_REPEAT_COUNT", 5)
-        }
-        ContextCompat.startForegroundService(context, serviceIntent)
-
-        context.sendBroadcast(
-            Intent("co.uk.doverguitarteacher.rubbishdayreminder.ALARM_UI")
-        )
-
-        val settingsManager = SettingsManager(context)
-        AlarmScheduler.scheduleAlarms(context, settingsManager)
-    }
-}
-
-class AlarmSoundService : Service() {
-    private var mediaPlayer: MediaPlayer? = null
-    private var remainingPlays: Int = 0
-    private var binName: String = "the bins"
-    private var timeOfDay: String = "soon"
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        binName = intent?.getStringExtra("EXTRA_BIN_NAME") ?: binName
-        timeOfDay = intent?.getStringExtra("EXTRA_TIME_OF_DAY") ?: timeOfDay
-        val total = intent?.getIntExtra("EXTRA_REPEAT_COUNT", 5) ?: 5
-        remainingPlays = total
-
-        startForeground(
-            1,
-            AlarmScheduler.buildPlaybackNotification(
-                this,
-                binName,
-                timeOfDay,
-                total - remainingPlays + 1,
-                total
-            )
-        )
-
-        playNext(total)
-        return START_NOT_STICKY
-    }
-
-    private fun playNext(total: Int) {
-        if (remainingPlays <= 0) {
-            stopSelf()
-            return
-        }
-        mediaPlayer?.release()
-        mediaPlayer = MediaPlayer.create(this, R.raw.alert_horn).apply {
-            setOnCompletionListener {
-                remainingPlays--
-                if (remainingPlays > 0) {
-                    val played = total - remainingPlays + 1
-                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    nm.notify(
-                        1,
-                        AlarmScheduler.buildPlaybackNotification(
-                            this@AlarmSoundService,
-                            binName,
-                            timeOfDay,
-                            played,
-                            total
-                        )
-                    )
-                    playNext(total)
-                } else {
-                    stopSelf()
-                }
-            }
-            start()
-        }
-    }
-
-    override fun onDestroy() {
-        mediaPlayer?.release()
-        mediaPlayer = null
-        super.onDestroy()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
 }
