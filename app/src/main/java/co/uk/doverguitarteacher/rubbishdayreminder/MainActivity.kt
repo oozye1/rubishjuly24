@@ -129,10 +129,11 @@ class MainActivity : ComponentActivity() {
 
 data class UpcomingCollection(val bin: BinType, val date: LocalDate)
 
-/** Use the per-bin frequency/anchor logic to build the next date for each bin, then sort. */
+/** Build next date for each **enabled** bin, then sort. */
 fun generateUpcomingCollections(settingsManager: SettingsManager): List<UpcomingCollection> {
     val today = LocalDate.now()
     return BinTypes.ALL_BINS
+        .filter { settingsManager.isBinEnabled(it.id) } // ONLY enabled bins
         .map { bin -> UpcomingCollection(bin, nextDateForBin(bin, settingsManager, today)) }
         .sortedBy { it.date }
 }
@@ -143,13 +144,7 @@ fun MainScreen(
     settingsManager: SettingsManager,
     onNavigateToSettings: () -> Unit
 ) {
-    // Regenerate when returning from settings by keying on a simple state tick
-    var tick by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        // no-op; could listen to a broadcast to update, but user navigates back which recreates composition
-    }
-
-    val upcomingCollections = remember(tick) { generateUpcomingCollections(settingsManager) }
+    val upcomingCollections = remember { generateUpcomingCollections(settingsManager) }
     val backgroundColor = Color(0xFF2c3e50)
 
     Box(
@@ -165,11 +160,23 @@ fun MainScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (upcomingCollections.isEmpty()) {
-                Text("No collections found. Please check settings.", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center)
+                Text(
+                    "No collections found. Please check settings.",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center
+                )
             } else {
                 val pagerState = rememberPagerState(pageCount = { upcomingCollections.size })
-                Text("Next Collections", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                Text(
+                    "Next Collections",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
                 Spacer(Modifier.height(24.dp))
+
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier
@@ -183,29 +190,38 @@ fun MainScreen(
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = onNavigateToSettings,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3498db))
-            ) { Text("Go to Settings") }
+            ) {
+                Text("Go to Settings")
+            }
         }
 
         NativeAdBanner(
             adUnitId = stringResource(id = R.string.ad_unit_id_banner),
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
         )
     }
 }
 
-// ----- Native ad helpers (unchanged from your version) -----
+// Native Ad Composable (unchanged)
 @Composable
-fun NativeAdBanner(adUnitId: String, modifier: Modifier = Modifier) {
+fun NativeAdBanner(
+    adUnitId: String,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     var nativeAd by remember { mutableStateOf<NativeAd?>(null) }
     var adLoader by remember { mutableStateOf<AdLoader?>(null) }
 
     LaunchedEffect(adUnitId) {
         adLoader = AdLoader.Builder(context, adUnitId)
-            .forNativeAd { ad ->
+            .forNativeAd { ad: NativeAd ->
                 nativeAd?.destroy()
                 nativeAd = ad
             }
@@ -215,38 +231,63 @@ fun NativeAdBanner(adUnitId: String, modifier: Modifier = Modifier) {
                     nativeAd = null
                 }
             })
-            .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT).build())
+            .withNativeAdOptions(
+                NativeAdOptions.Builder()
+                    .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
+                    .build()
+            )
             .build()
         adLoader?.loadAd(AdRequest.Builder().build())
     }
 
     DisposableEffect(Unit) {
-        onDispose { nativeAd?.destroy(); nativeAd = null }
+        onDispose {
+            nativeAd?.destroy()
+            nativeAd = null
+        }
     }
 
     if (nativeAd != null) {
         AndroidView(
             modifier = modifier,
             factory = { ctx -> buildNativeAdView(ctx, nativeAd!!) },
-            update = { adView -> nativeAd?.let { populateNativeAdView(adView as com.google.android.gms.ads.nativead.NativeAdView, it) } }
+            update = { adView ->
+                nativeAd?.let {
+                    populateNativeAdView(
+                        adView as com.google.android.gms.ads.nativead.NativeAdView,
+                        it
+                    )
+                }
+            }
         )
     }
 }
 
-private fun buildNativeAdView(context: Context, ad: NativeAd): com.google.android.gms.ads.nativead.NativeAdView {
+// Build NativeAdView programmatically (unchanged)
+private fun buildNativeAdView(
+    context: Context,
+    ad: NativeAd
+): com.google.android.gms.ads.nativead.NativeAdView {
     val adView = com.google.android.gms.ads.nativead.NativeAdView(context)
-    adView.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    adView.layoutParams = ViewGroup.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    )
 
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
         gravity = Gravity.CENTER_VERTICAL
         setPadding(context.dpToPx(12), context.dpToPx(8), context.dpToPx(12), context.dpToPx(8))
         setBackgroundColor(0xFF1E2A36.toInt())
     }
 
     val iconView = ImageView(context).apply {
-        val size = context.dpToPx(48); layoutParams = LinearLayout.LayoutParams(size, size)
+        val size = context.dpToPx(48)
+        layoutParams = LinearLayout.LayoutParams(size, size)
     }
 
     val textColumn = LinearLayout(context).apply {
@@ -256,14 +297,22 @@ private fun buildNativeAdView(context: Context, ad: NativeAd): com.google.androi
     }
 
     val headlineView = TextView(context).apply {
-        typeface = Typeface.DEFAULT_BOLD; textSize = 16f; setTextColor(0xFFFFFFFF.toInt())
-    }
-    val advertiserView = TextView(context).apply {
-        textSize = 12f; setTextColor(0xFFB0BEC5.toInt())
+        typeface = Typeface.DEFAULT_BOLD
+        textSize = 16f
+        setTextColor(0xFFFFFFFF.toInt())
     }
 
-    textColumn.addView(headlineView); textColumn.addView(advertiserView)
-    container.addView(iconView); container.addView(textColumn)
+    val advertiserView = TextView(context).apply {
+        textSize = 12f
+        setTextColor(0xFFB0BEC5.toInt())
+    }
+
+    textColumn.addView(headlineView)
+    textColumn.addView(advertiserView)
+
+    container.addView(iconView)
+    container.addView(textColumn)
+
     adView.addView(container)
 
     adView.iconView = iconView
@@ -274,10 +323,14 @@ private fun buildNativeAdView(context: Context, ad: NativeAd): com.google.androi
     return adView
 }
 
-private fun populateNativeAdView(adView: com.google.android.gms.ads.nativead.NativeAdView, nativeAd: NativeAd) {
+private fun populateNativeAdView(
+    adView: com.google.android.gms.ads.nativead.NativeAdView,
+    nativeAd: NativeAd
+) {
     (adView.headlineView as? TextView)?.text = nativeAd.headline ?: ""
     val advertiserText = nativeAd.advertiser ?: ""
-    (adView.advertiserView as? TextView)?.text = if (advertiserText.isNotBlank()) advertiserText else "Sponsored"
+    (adView.advertiserView as? TextView)?.text =
+        if (advertiserText.isNotBlank()) advertiserText else "Sponsored"
     val iconDrawable = nativeAd.icon?.drawable
     (adView.iconView as? ImageView)?.apply {
         setImageDrawable(iconDrawable)
@@ -286,23 +339,44 @@ private fun populateNativeAdView(adView: com.google.android.gms.ads.nativead.Nat
     adView.setNativeAd(nativeAd)
 }
 
-private fun Context.dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).roundToInt()
+private fun Context.dpToPx(dp: Int): Int =
+    (dp * resources.displayMetrics.density).roundToInt()
 
 @Composable
 fun CollectionCard(collection: UpcomingCollection) {
     val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM")
+
     val titleColor: Color =
-        if (collection.bin.displayName.equals("Rubbish", true)) Color(0xFFFFC107) else collection.bin.color
+        if (collection.bin.displayName.equals("Rubbish", ignoreCase = true)) {
+            Color(0xFFFFC107)
+        } else {
+            collection.bin.color
+        }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Image(painter = painterResource(id = collection.bin.iconResId), contentDescription = collection.bin.displayName, modifier = Modifier.size(120.dp))
+        Image(
+            painter = painterResource(id = collection.bin.iconResId),
+            contentDescription = collection.bin.displayName,
+            modifier = Modifier.size(120.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            collection.bin.displayName,
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = titleColor
+        )
         Spacer(Modifier.height(16.dp))
-        Text(collection.bin.displayName, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = titleColor)
-        Spacer(Modifier.height(16.dp))
-        Text(collection.date.format(dateFormatter), fontSize = 22.sp, color = Color.White)
+        Text(
+            collection.date.format(dateFormatter),
+            fontSize = 22.sp,
+            color = Color.White
+        )
     }
 }

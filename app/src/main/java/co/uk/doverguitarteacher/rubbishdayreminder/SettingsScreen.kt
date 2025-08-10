@@ -43,6 +43,7 @@ fun SettingsScreen(
     var morningTime by remember { mutableStateOf(settingsManager.getMorningReminderTime()) }
 
     data class PerBinState(
+        var enabled: Boolean,
         var enabledOverrideDay: Boolean,
         var day: DayOfWeek,
         var frequency: Frequency,
@@ -54,6 +55,7 @@ fun SettingsScreen(
             val customDay = settingsManager.getBinCollectionDay(bin.id)
             val effectiveDay = customDay ?: settingsManager.getCollectionDay()
             PerBinState(
+                enabled = settingsManager.isBinEnabled(bin.id),
                 enabledOverrideDay = customDay != null,
                 day = effectiveDay,
                 frequency = settingsManager.getBinFrequency(bin.id),
@@ -104,12 +106,20 @@ fun SettingsScreen(
                             )
                             perBinState.forEach { (bin, holder) ->
                                 val s = holder.value
-                                settingsManager.saveBinCollectionDay(bin.id, if (s.enabledOverrideDay) s.day else null)
-                                settingsManager.saveBinFrequency(bin.id, s.frequency)
-                                settingsManager.saveBinAnchorDate(
-                                    bin.id,
-                                    if (s.frequency == Frequency.FORTNIGHTLY) s.anchorDate else null
-                                )
+                                settingsManager.saveBinEnabled(bin.id, s.enabled)
+                                if (s.enabled) {
+                                    settingsManager.saveBinCollectionDay(bin.id, if (s.enabledOverrideDay) s.day else null)
+                                    settingsManager.saveBinFrequency(bin.id, s.frequency)
+                                    settingsManager.saveBinAnchorDate(
+                                        bin.id,
+                                        if (s.frequency == Frequency.FORTNIGHTLY) s.anchorDate else null
+                                    )
+                                } else {
+                                    // clean up optional prefs for disabled bins (optional)
+                                    settingsManager.saveBinCollectionDay(bin.id, null)
+                                    settingsManager.saveBinAnchorDate(bin.id, null)
+                                    settingsManager.saveBinFrequency(bin.id, Frequency.WEEKLY)
+                                }
                             }
                             AlarmScheduler.scheduleAlarms(appContext, settingsManager)
                             onNavigateBack()
@@ -152,33 +162,43 @@ fun SettingsScreen(
                 val holder = perBinState[bin]!!
                 val s = holder.value
                 SectionCard {
+                    // Header: name + Enable toggle
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(bin.displayName, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         CompactSwitchLabel(
-                            label = "Override day",
-                            checked = s.enabledOverrideDay,
-                            onCheckedChange = { holder.value = s.copy(enabledOverrideDay = it) }
+                            label = "Enable",
+                            checked = s.enabled,
+                            onCheckedChange = { holder.value = s.copy(enabled = it) }
                         )
                     }
-                    if (s.enabledOverrideDay) {
+
+                    if (s.enabled) {
+                        // Override + Day
                         Spacer(Modifier.height(6.dp))
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Day", color = Color(0xFFbdc3c7), fontSize = 12.sp)
-                            Spacer(Modifier.width(10.dp))
-                            DayOfWeekCompactDropdown(s.day) { d -> holder.value = s.copy(day = d) }
+                            CompactSwitchLabel(
+                                label = "Override day",
+                                checked = s.enabledOverrideDay,
+                                onCheckedChange = { holder.value = s.copy(enabledOverrideDay = it) }
+                            )
+                            Spacer(Modifier.weight(1f))
+                            if (s.enabledOverrideDay) {
+                                DayOfWeekCompactDropdown(s.day) { d -> holder.value = s.copy(day = d) }
+                            }
                         }
-                    }
 
-                    Spacer(Modifier.height(6.dp))
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Frequency", color = Color(0xFFbdc3c7), fontSize = 12.sp)
-                        Spacer(Modifier.width(10.dp))
-                        FrequencyCompactDropdown(s.frequency) { f -> holder.value = s.copy(frequency = f) }
-                        if (s.frequency == Frequency.FORTNIGHTLY) {
+                        // Frequency + Anchor
+                        Spacer(Modifier.height(6.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Frequency", color = Color(0xFFbdc3c7), fontSize = 12.sp)
                             Spacer(Modifier.width(10.dp))
-                            val label = s.anchorDate?.format(dateFormatter) ?: "Start date"
-                            CompactChip(label) {
-                                showDatePicker(s.anchorDate) { picked -> holder.value = s.copy(anchorDate = picked) }
+                            FrequencyCompactDropdown(s.frequency) { f -> holder.value = s.copy(frequency = f) }
+                            if (s.frequency == Frequency.FORTNIGHTLY) {
+                                Spacer(Modifier.width(10.dp))
+                                val label = s.anchorDate?.format(dateFormatter) ?: "Start date"
+                                CompactChip(label) {
+                                    showDatePicker(s.anchorDate) { picked -> holder.value = s.copy(anchorDate = picked) }
+                                }
                             }
                         }
                     }

@@ -8,25 +8,22 @@ import java.time.LocalTime
 class SettingsManager(context: Context) {
     private val prefs = context.getSharedPreferences("app_settings_final_v3", Context.MODE_PRIVATE)
 
-    private val KEY_COLLECTION_DAY = "collection_day" // global fallback
-    private val KEY_ANCHOR_BIN_ID = "anchor_bin_id"   // legacy, kept for compatibility
+    private val KEY_COLLECTION_DAY = "collection_day"
+    private val KEY_ANCHOR_BIN_ID = "anchor_bin_id"
 
-    // Global toggles
     private val KEY_EVENING_REMINDER_ENABLED = "evening_reminder_enabled"
     private val KEY_MORNING_REMINDER_ENABLED = "morning_reminder_enabled"
 
-    // Times
     private val KEY_EVENING_REMINDER_HOUR = "evening_reminder_hour"
     private val KEY_EVENING_REMINDER_MINUTE = "evening_reminder_minute"
     private val KEY_MORNING_REMINDER_HOUR = "morning_reminder_hour"
     private val KEY_MORNING_REMINDER_MINUTE = "morning_reminder_minute"
 
-    // Per-bin keys
     private fun keyBinDay(binId: String) = "collection_day_$binId"
-    private fun keyBinFreq(binId: String) = "freq_$binId"                 // WEEKLY | FORTNIGHTLY
-    private fun keyBinAnchorIso(binId: String) = "anchor_iso_$binId"      // yyyy-MM-dd
+    private fun keyBinFreq(binId: String) = "freq_$binId"
+    private fun keyBinAnchorIso(binId: String) = "anchor_iso_$binId"
+    private fun keyBinEnabled(binId: String) = "bin_enabled_$binId" // NEW
 
-    // -------- Global fallback collection day --------
     fun saveCollectionDay(day: DayOfWeek) =
         prefs.edit().putString(KEY_COLLECTION_DAY, day.name).apply()
 
@@ -34,14 +31,12 @@ class SettingsManager(context: Context) {
         DayOfWeek.valueOf(prefs.getString(KEY_COLLECTION_DAY, DayOfWeek.TUESDAY.name)
             ?: DayOfWeek.TUESDAY.name)
 
-    // -------- Legacy anchor bin rotation (kept, not used by new logic) --------
     fun saveCycleAnchor(anchorBin: BinType) =
         prefs.edit().putString(KEY_ANCHOR_BIN_ID, anchorBin.id).apply()
 
     fun getAnchorBin(): BinType =
         BinTypes.findById(prefs.getString(KEY_ANCHOR_BIN_ID, BinTypes.GENERAL.id))
 
-    // -------- Global reminders + times --------
     fun saveReminderSettings(
         eveningEnabled: Boolean,
         morningEnabled: Boolean,
@@ -72,7 +67,6 @@ class SettingsManager(context: Context) {
         LocalTime.of(prefs.getInt(KEY_MORNING_REMINDER_HOUR, 7),
             prefs.getInt(KEY_MORNING_REMINDER_MINUTE, 0))
 
-    // -------- Per-bin overrides --------
     fun getBinCollectionDay(binId: String): DayOfWeek? {
         val s = prefs.getString(keyBinDay(binId), null) ?: return null
         return runCatching { DayOfWeek.valueOf(s) }.getOrNull()
@@ -88,7 +82,6 @@ class SettingsManager(context: Context) {
         return getBinCollectionDay(bin.id) ?: getCollectionDay()
     }
 
-    // -------- Per-bin frequency + anchor date --------
     fun getBinFrequency(binId: String): Frequency {
         val raw = prefs.getString(keyBinFreq(binId), null) ?: return Frequency.WEEKLY
         return runCatching { Frequency.valueOf(raw) }.getOrDefault(Frequency.WEEKLY)
@@ -107,5 +100,13 @@ class SettingsManager(context: Context) {
         val e = prefs.edit()
         if (date == null) e.remove(keyBinAnchorIso(binId)) else e.putString(keyBinAnchorIso(binId), date.toString())
         e.apply()
+    }
+
+    // ----- NEW: per-bin enabled flag -----
+    fun isBinEnabled(binId: String): Boolean =
+        prefs.getBoolean(keyBinEnabled(binId), true) // default ON to preserve existing behaviour
+
+    fun saveBinEnabled(binId: String, enabled: Boolean) {
+        prefs.edit().putBoolean(keyBinEnabled(binId), enabled).apply()
     }
 }

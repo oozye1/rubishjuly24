@@ -27,44 +27,28 @@ object AlarmScheduler {
         cancelAlarm(context, EVENING_REQUEST_CODE)
         cancelAlarm(context, MORNING_REQUEST_CODE)
 
-        // NEW LOGIC: get the earliest upcoming bin/date using per-bin Weekly/Fortnightly + Anchor
-        val (bin, upcomingDate) = nextUpcomingBinAndDate(settingsManager)
+        val pair = nextUpcomingBinAndDate(settingsManager) ?: return // nothing enabled -> no alarms
+        val (bin, upcomingDate) = pair
         val binName = bin.displayName
         val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
         if (settingsManager.isEveningReminderEnabled()) {
             val t = settingsManager.getEveningReminderTime()
             val runAt = upcomingDate.minusDays(1).atTime(t)
-            setExactAlarm(
-                alarmManager,
-                runAt,
-                createPendingIntent(context, EVENING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}")
-            )
+            setExactAlarm(alarmManager, runAt, createPendingIntent(context, EVENING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}"))
         }
 
         if (settingsManager.isMorningReminderEnabled()) {
             val t = settingsManager.getMorningReminderTime()
             val runAt = upcomingDate.atTime(t)
-            setExactAlarm(
-                alarmManager,
-                runAt,
-                createPendingIntent(context, MORNING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}")
-            )
+            setExactAlarm(alarmManager, runAt, createPendingIntent(context, MORNING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}"))
         }
     }
 
-    private fun setExactAlarm(
-        alarmManager: AlarmManager,
-        time: LocalDateTime,
-        pendingIntent: PendingIntent
-    ) {
+    private fun setExactAlarm(alarmManager: AlarmManager, time: LocalDateTime, pendingIntent: PendingIntent) {
         val millis = time.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         if (millis > System.currentTimeMillis() && alarmManager.canScheduleExactAlarms()) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                millis,
-                pendingIntent
-            )
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pendingIntent)
         }
     }
 
@@ -74,12 +58,7 @@ object AlarmScheduler {
         alarmManager.cancel(intent)
     }
 
-    private fun createPendingIntent(
-        context: Context,
-        requestCode: Int,
-        binName: String,
-        timeOfDay: String
-    ): PendingIntent {
+    private fun createPendingIntent(context: Context, requestCode: Int, binName: String, timeOfDay: String): PendingIntent {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("EXTRA_BIN_NAME", binName)
             putExtra("EXTRA_TIME_OF_DAY", timeOfDay)
@@ -93,15 +72,11 @@ object AlarmScheduler {
     }
 
     fun createNotificationChannel(context: Context) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val soundUri =
-            Uri.parse("android.resource://${context.packageName}/${R.raw.alert_horn}")
+        val soundUri = Uri.parse("android.resource://${context.packageName}/${R.raw.alert_horn}")
         val soundChannel = NotificationChannel(
-            CHANNEL_ID,
-            "Bin Day Reminders",
-            NotificationManager.IMPORTANCE_HIGH
+            CHANNEL_ID, "Bin Day Reminders", NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Notifications for upcoming bin collections"
             setSound(
@@ -115,24 +90,18 @@ object AlarmScheduler {
         }
 
         val playbackChannel = NotificationChannel(
-            PLAYBACK_CHANNEL_ID,
-            "Bin Day Playback",
-            NotificationManager.IMPORTANCE_LOW
+            PLAYBACK_CHANNEL_ID, "Bin Day Playback", NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Foreground service playing alarm sound repeats"
             setSound(null, null)
             enableVibration(false)
         }
 
-        notificationManager.createNotificationChannel(soundChannel)
-        notificationManager.createNotificationChannel(playbackChannel)
+        nm.createNotificationChannel(soundChannel)
+        nm.createNotificationChannel(playbackChannel)
     }
 
-    internal fun buildAlarmNotification(
-        context: Context,
-        binName: String,
-        timeOfDay: String
-    ): Notification {
+    internal fun buildAlarmNotification(context: Context, binName: String, timeOfDay: String): Notification {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_trash_can)
             .setContentTitle("Bin Day Reminder!")
