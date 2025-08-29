@@ -5,6 +5,7 @@ import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -35,6 +36,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -131,11 +133,10 @@ class MainActivity : ComponentActivity() {
 
 data class UpcomingCollection(val bin: BinType, val date: LocalDate)
 
-/** Build next date for each **enabled** bin, then sort. */
 fun generateUpcomingCollections(settingsManager: SettingsManager): List<UpcomingCollection> {
     val today = LocalDate.now()
     return BinTypes.ALL_BINS
-        .filter { settingsManager.isBinEnabled(it.id) } // ONLY enabled bins
+        .filter { settingsManager.isBinEnabled(it.id) }
         .map { bin -> UpcomingCollection(bin, nextDateForBin(bin, settingsManager, today)) }
         .sortedBy { it.date }
 }
@@ -149,47 +150,130 @@ fun MainScreen(
     val upcomingCollections = remember { generateUpcomingCollections(settingsManager) }
     val backgroundColor = Color(0xFF2c3e50)
 
-    Box(
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // --- CHANGE 1: The root layout is now a Column instead of a Box. ---
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
-            .padding(horizontal = 16.dp)
     ) {
-        Column(
+        // --- CHANGE 2: The main content is wrapped in a Box with a weight of 1f. ---
+        // This makes it take up all available space *above* the ad banner.
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .weight(1f)
+                .padding(16.dp) // Padding is now applied here
         ) {
             if (upcomingCollections.isEmpty()) {
                 Text(
                     "No collections found. Please check settings.",
                     color = Color.White,
                     fontSize = 18.sp,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                val pagerState = rememberPagerState(pageCount = { upcomingCollections.size })
-
-                Text(
-                    "Next Collections",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(24.dp))
-
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier
-                        // *** CHANGE 1: Increased height to give the card more space ***
-                        .height(300.dp)
-                        .fillMaxWidth()
-                ) { page ->
-                    val collection = upcomingCollections[page]
-                    CollectionCard(collection = collection)
+                if (isLandscape) {
+                    LandscapeLayout(upcomingCollections, onNavigateToSettings)
+                } else {
+                    PortraitLayout(upcomingCollections, onNavigateToSettings)
                 }
             }
+        }
+
+        // --- CHANGE 3: The ad banner is now a direct child of the Column. ---
+        // It will be placed at the bottom, and the Box above will resize to fit.
+        NativeAdBanner(
+            adUnitId = stringResource(id = R.string.ad_unit_id_banner),
+            modifier = Modifier.fillMaxWidth() // No longer needs .align()
+        )
+    }
+}
+
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PortraitLayout(
+    upcomingCollections: List<UpcomingCollection>,
+    onNavigateToSettings: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        val pagerState = rememberPagerState(pageCount = { upcomingCollections.size })
+
+        Text(
+            "Next Collections",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        Spacer(Modifier.height(24.dp))
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f) // This weight is important, it lets the pager fill the space
+        ) { page ->
+            val collection = upcomingCollections[page]
+            CollectionCard(collection = collection)
+        }
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onNavigateToSettings,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3498db))
+        ) {
+            Text("Go to Settings")
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun LandscapeLayout(
+    upcomingCollections: List<UpcomingCollection>,
+    onNavigateToSettings: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        val pagerState = rememberPagerState(pageCount = { upcomingCollections.size })
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxHeight()
+                .weight(0.6f)
+        ) { page ->
+            val collection = upcomingCollections[page]
+            CollectionCard(collection = collection, isLandscape = true)
+        }
+
+        Spacer(Modifier.width(24.dp))
+
+        Column(
+            modifier = Modifier.weight(0.4f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                "Next Collections",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = onNavigateToSettings,
@@ -202,13 +286,6 @@ fun MainScreen(
                 Text("Go to Settings")
             }
         }
-
-        NativeAdBanner(
-            adUnitId = stringResource(id = R.string.ad_unit_id_banner),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-        )
     }
 }
 
@@ -345,25 +422,28 @@ private fun populateNativeAdView(
 private fun Context.dpToPx(dp: Int): Int =
     (dp * resources.displayMetrics.density).roundToInt()
 
-// *** CHANGE 2: The entire CollectionCard is now wrapped in an ElevatedCard ***
 @Composable
-fun CollectionCard(collection: UpcomingCollection) {
+fun CollectionCard(collection: UpcomingCollection, isLandscape: Boolean = false) {
     val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM")
 
     val titleColor: Color =
         if (collection.bin.displayName.equals("Rubbish", ignoreCase = true)) {
-            Color(0xFFFFC107) // Yellow for rubbish
+            Color(0xFFFFC107)
         } else {
             collection.bin.color
         }
+
+    val imageSize = if (isLandscape) 90.dp else 120.dp
+    val titleSize = if (isLandscape) 26.sp else 32.sp
+    val dateSize = if (isLandscape) 18.sp else 22.sp
+    val spacerHeight = if (isLandscape) 12.dp else 16.dp
 
     ElevatedCard(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(24.dp), // Nicer, more rounded corners
+        shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        // A color that stands out slightly from your background
         colors = CardDefaults.cardColors(containerColor = Color(0xFF34495e))
     ) {
         Column(
@@ -376,19 +456,19 @@ fun CollectionCard(collection: UpcomingCollection) {
             Image(
                 painter = painterResource(id = collection.bin.iconResId),
                 contentDescription = collection.bin.displayName,
-                modifier = Modifier.size(120.dp)
+                modifier = Modifier.size(imageSize)
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(spacerHeight))
             Text(
                 collection.bin.displayName,
-                fontSize = 32.sp,
+                fontSize = titleSize,
                 fontWeight = FontWeight.Bold,
                 color = titleColor
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(spacerHeight))
             Text(
                 collection.date.format(dateFormatter),
-                fontSize = 22.sp,
+                fontSize = dateSize,
                 color = Color.White
             )
         }
