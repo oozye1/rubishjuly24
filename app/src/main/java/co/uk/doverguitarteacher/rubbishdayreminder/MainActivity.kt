@@ -28,6 +28,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -180,7 +182,8 @@ fun MainScreen(
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier
-                        .height(260.dp)
+                        // *** CHANGE 1: Increased height to give the card more space ***
+                        .height(300.dp)
                         .fillMaxWidth()
                 ) { page ->
                     val collection = upcomingCollections[page]
@@ -342,41 +345,52 @@ private fun populateNativeAdView(
 private fun Context.dpToPx(dp: Int): Int =
     (dp * resources.displayMetrics.density).roundToInt()
 
+// *** CHANGE 2: The entire CollectionCard is now wrapped in an ElevatedCard ***
 @Composable
 fun CollectionCard(collection: UpcomingCollection) {
     val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM")
 
     val titleColor: Color =
         if (collection.bin.displayName.equals("Rubbish", ignoreCase = true)) {
-            Color(0xFFFFC107)
+            Color(0xFFFFC107) // Yellow for rubbish
         } else {
             collection.bin.color
         }
 
-    Column(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(24.dp), // Nicer, more rounded corners
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        // A color that stands out slightly from your background
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF34495e))
     ) {
-        Image(
-            painter = painterResource(id = collection.bin.iconResId),
-            contentDescription = collection.bin.displayName,
-            modifier = Modifier.size(120.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            collection.bin.displayName,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            color = titleColor
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            collection.date.format(dateFormatter),
-            fontSize = 22.sp,
-            color = Color.White
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(id = collection.bin.iconResId),
+                contentDescription = collection.bin.displayName,
+                modifier = Modifier.size(120.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                collection.bin.displayName,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = titleColor
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                collection.date.format(dateFormatter),
+                fontSize = 22.sp,
+                color = Color.White
+            )
+        }
     }
 }

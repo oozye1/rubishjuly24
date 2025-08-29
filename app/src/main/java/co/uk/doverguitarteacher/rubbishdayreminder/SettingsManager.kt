@@ -24,6 +24,9 @@ class SettingsManager(context: Context) {
     private fun keyBinAnchorIso(binId: String) = "anchor_iso_$binId"
     private fun keyBinEnabled(binId: String) = "bin_enabled_$binId" // NEW
 
+    // --- NEW KEY FOR SOUND SETTING ---
+    private val KEY_SELECTED_SOUND_ID = "selected_sound_id"
+
     fun saveCollectionDay(day: DayOfWeek) =
         prefs.edit().putString(KEY_COLLECTION_DAY, day.name).apply()
 
@@ -102,11 +105,21 @@ class SettingsManager(context: Context) {
         e.apply()
     }
 
-    // ----- NEW: per-bin enabled flag -----
     fun isBinEnabled(binId: String): Boolean =
-        prefs.getBoolean(keyBinEnabled(binId), true) // default ON to preserve existing behaviour
+        prefs.getBoolean(keyBinEnabled(binId), true)
 
     fun saveBinEnabled(binId: String, enabled: Boolean) {
         prefs.edit().putBoolean(keyBinEnabled(binId), enabled).apply()
+    }
+
+    // ----- NEW: Functions to manage notification sound -----
+
+    fun saveSelectedSound(sound: NotificationSound) {
+        prefs.edit().putString(KEY_SELECTED_SOUND_ID, sound.id).apply()
+    }
+
+    fun getSelectedSound(): NotificationSound {
+        val soundId = prefs.getString(KEY_SELECTED_SOUND_ID, null)
+        return NotificationSound.fromId(soundId)
     }
 }

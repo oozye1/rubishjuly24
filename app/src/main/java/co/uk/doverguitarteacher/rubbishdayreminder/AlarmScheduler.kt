@@ -8,7 +8,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
-import android.net.Uri
 import androidx.core.app.NotificationCompat
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -32,16 +31,23 @@ object AlarmScheduler {
         val binName = bin.displayName
         val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
+        // --- CHANGE 1: Get the selected sound from settings ---
+        val selectedSound = settingsManager.getSelectedSound()
+        // Pass the resource ID. If silent, this will be null, so we use -1.
+        val soundResourceId = selectedSound.resourceId ?: -1
+
         if (settingsManager.isEveningReminderEnabled()) {
             val t = settingsManager.getEveningReminderTime()
             val runAt = upcomingDate.minusDays(1).atTime(t)
-            setExactAlarm(alarmManager, runAt, createPendingIntent(context, EVENING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}"))
+            val pendingIntent = createPendingIntent(context, EVENING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}", soundResourceId)
+            setExactAlarm(alarmManager, runAt, pendingIntent)
         }
 
         if (settingsManager.isMorningReminderEnabled()) {
             val t = settingsManager.getMorningReminderTime()
             val runAt = upcomingDate.atTime(t)
-            setExactAlarm(alarmManager, runAt, createPendingIntent(context, MORNING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}"))
+            val pendingIntent = createPendingIntent(context, MORNING_REQUEST_CODE, binName, "at ${t.format(timeFormatter)}", soundResourceId)
+            setExactAlarm(alarmManager, runAt, pendingIntent)
         }
     }
 
@@ -54,14 +60,17 @@ object AlarmScheduler {
 
     private fun cancelAlarm(context: Context, requestCode: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = createPendingIntent(context, requestCode, "", "")
+        val intent = createPendingIntent(context, requestCode, "", "", -1)
         alarmManager.cancel(intent)
     }
 
-    private fun createPendingIntent(context: Context, requestCode: Int, binName: String, timeOfDay: String): PendingIntent {
+    // --- CHANGE 2: The function now accepts the sound resource ID ---
+    private fun createPendingIntent(context: Context, requestCode: Int, binName: String, timeOfDay: String, soundResId: Int): PendingIntent {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("EXTRA_BIN_NAME", binName)
             putExtra("EXTRA_TIME_OF_DAY", timeOfDay)
+            // Add the sound ID to the intent
+            putExtra("EXTRA_SOUND_RESOURCE_ID", soundResId)
         }
         return PendingIntent.getBroadcast(
             context,
@@ -74,18 +83,12 @@ object AlarmScheduler {
     fun createNotificationChannel(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val soundUri = Uri.parse("android.resource://${context.packageName}/${R.raw.alert_horn}")
+        // --- CHANGE 3: The main channel is now SILENT by default. The service will play the sound. ---
         val soundChannel = NotificationChannel(
             CHANNEL_ID, "Bin Day Reminders", NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Notifications for upcoming bin collections"
-            setSound(
-                soundUri,
-                AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .build()
-            )
+            // REMOVED: .setSound() call. The channel itself has no sound.
             enableVibration(true)
         }
 

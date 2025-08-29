@@ -2,6 +2,7 @@ package co.uk.doverguitarteacher.rubbishdayreminder
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,16 +36,27 @@ fun SettingsScreen(
 ) {
     val appContext = LocalContext.current.applicationContext
 
-    var selectedDay by remember { mutableStateOf(settingsManager.getCollectionDay()) }
     var eveningReminder by remember { mutableStateOf(settingsManager.isEveningReminderEnabled()) }
     var morningReminder by remember { mutableStateOf(settingsManager.isMorningReminderEnabled()) }
 
     var eveningTime by remember { mutableStateOf(settingsManager.getEveningReminderTime()) }
     var morningTime by remember { mutableStateOf(settingsManager.getMorningReminderTime()) }
 
+    var selectedSound by remember { mutableStateOf(settingsManager.getSelectedSound()) }
+
+    // --- CHANGE 1: Add a MediaPlayer instance for previews ---
+    var previewMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+
+    // --- CHANGE 2: Ensure the MediaPlayer is released when the screen is closed ---
+    DisposableEffect(Unit) {
+        onDispose {
+            previewMediaPlayer?.release()
+            previewMediaPlayer = null
+        }
+    }
+
     data class PerBinState(
         var enabled: Boolean,
-        var enabledOverrideDay: Boolean,
         var day: DayOfWeek,
         var frequency: Frequency,
         var anchorDate: LocalDate?
@@ -53,10 +65,9 @@ fun SettingsScreen(
     val perBinState = remember {
         BinTypes.ALL_BINS.associateWith { bin ->
             val customDay = settingsManager.getBinCollectionDay(bin.id)
-            val effectiveDay = customDay ?: settingsManager.getCollectionDay()
+            val effectiveDay = customDay ?: DayOfWeek.MONDAY
             PerBinState(
                 enabled = settingsManager.isBinEnabled(bin.id),
-                enabledOverrideDay = customDay != null,
                 day = effectiveDay,
                 frequency = settingsManager.getBinFrequency(bin.id),
                 anchorDate = settingsManager.getBinAnchorDate(bin.id)
@@ -97,25 +108,25 @@ fun SettingsScreen(
 
                     Button(
                         onClick = {
-                            settingsManager.saveCollectionDay(selectedDay)
                             settingsManager.saveReminderSettings(
                                 eveningEnabled = eveningReminder,
                                 morningEnabled = morningReminder,
                                 eveningTime = eveningTime,
                                 morningTime = morningTime
                             )
+                            settingsManager.saveSelectedSound(selectedSound)
+
                             perBinState.forEach { (bin, holder) ->
                                 val s = holder.value
                                 settingsManager.saveBinEnabled(bin.id, s.enabled)
                                 if (s.enabled) {
-                                    settingsManager.saveBinCollectionDay(bin.id, if (s.enabledOverrideDay) s.day else null)
+                                    settingsManager.saveBinCollectionDay(bin.id, s.day)
                                     settingsManager.saveBinFrequency(bin.id, s.frequency)
                                     settingsManager.saveBinAnchorDate(
                                         bin.id,
                                         if (s.frequency == Frequency.FORTNIGHTLY) s.anchorDate else null
                                     )
                                 } else {
-                                    // clean up optional prefs for disabled bins (optional)
                                     settingsManager.saveBinCollectionDay(bin.id, null)
                                     settingsManager.saveBinAnchorDate(bin.id, null)
                                     settingsManager.saveBinFrequency(bin.id, Frequency.WEEKLY)
@@ -137,21 +148,11 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 88.dp, top = 12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 88.dp, top = 16.dp)
         ) {
             item {
                 Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-
-            item {
-                SectionCard {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Default collection day", color = Color(0xFFbdc3c7), fontSize = 13.sp)
-                        Spacer(Modifier.weight(1f))
-                        DayOfWeekCompactDropdown(selectedDay) { selectedDay = it }
-                    }
-                }
             }
 
             item {
@@ -162,7 +163,6 @@ fun SettingsScreen(
                 val holder = perBinState[bin]!!
                 val s = holder.value
                 SectionCard {
-                    // Header: name + Enable toggle
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(bin.displayName, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         CompactSwitchLabel(
@@ -171,24 +171,14 @@ fun SettingsScreen(
                             onCheckedChange = { holder.value = s.copy(enabled = it) }
                         )
                     }
-
                     if (s.enabled) {
-                        // Override + Day
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(8.dp))
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            CompactSwitchLabel(
-                                label = "Override day",
-                                checked = s.enabledOverrideDay,
-                                onCheckedChange = { holder.value = s.copy(enabledOverrideDay = it) }
-                            )
+                            Text("Collection Day", color = Color(0xFFbdc3c7), fontSize = 12.sp)
                             Spacer(Modifier.weight(1f))
-                            if (s.enabledOverrideDay) {
-                                DayOfWeekCompactDropdown(s.day) { d -> holder.value = s.copy(day = d) }
-                            }
+                            DayOfWeekCompactDropdown(s.day) { d -> holder.value = s.copy(day = d) }
                         }
-
-                        // Frequency + Anchor
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(8.dp))
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text("Frequency", color = Color(0xFFbdc3c7), fontSize = 12.sp)
                             Spacer(Modifier.width(10.dp))
@@ -219,7 +209,7 @@ fun SettingsScreen(
                         onPickTime = { if (eveningReminder) showTimePicker(eveningTime) { eveningTime = it } },
                         timeFormatter = timeFormatter
                     )
-                    Divider(color = Color(0xFF3A5166))
+                    Divider(color = Color(0xFF3A5166), modifier = Modifier.padding(vertical = 4.dp))
                     CompactReminderRow(
                         label = "Morning",
                         time = morningTime,
@@ -228,6 +218,37 @@ fun SettingsScreen(
                         onPickTime = { if (morningReminder) showTimePicker(morningTime) { morningTime = it } },
                         timeFormatter = timeFormatter
                     )
+                }
+            }
+
+            item {
+                SectionCard {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Notification Sound", color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        SoundCompactDropdown(
+                            selected = selectedSound,
+                            onSelected = { newSound ->
+                                selectedSound = newSound
+
+                                // --- CHANGE 3: Logic to play the sound preview ---
+                                // Stop and release any sound that's currently playing
+                                previewMediaPlayer?.stop()
+                                previewMediaPlayer?.release()
+                                previewMediaPlayer = null
+
+                                // If the new sound is not "Silent", create and play it
+                                newSound.resourceId?.let { soundResId ->
+                                    previewMediaPlayer = MediaPlayer.create(appContext, soundResId).apply {
+                                        setOnCompletionListener { mp ->
+                                            mp.release()
+                                            previewMediaPlayer = null
+                                        }
+                                        start()
+                                    }
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -240,12 +261,12 @@ fun SettingsScreen(
 private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263645)),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF34495e)),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             content = content
         )
     }
@@ -301,7 +322,7 @@ private fun DropdownBox(currentText: String, items: List<String>, onSelect: (Int
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            containerColor = Color(0xFF34495e)
+            modifier = Modifier.background(Color(0xFF34495e))
         ) {
             items.forEachIndexed { index, txt ->
                 DropdownMenuItem(
@@ -356,5 +377,16 @@ private fun CompactReminderRow(
                 uncheckedTrackColor = Color.Gray
             )
         )
+    }
+}
+
+@Composable
+private fun SoundCompactDropdown(selected: NotificationSound, onSelected: (NotificationSound) -> Unit) {
+    val items = remember { NotificationSound.values().map { it.displayName } }
+    DropdownBox(
+        currentText = selected.displayName,
+        items = items
+    ) { index ->
+        onSelected(NotificationSound.values()[index])
     }
 }
