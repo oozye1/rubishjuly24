@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Typeface
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -20,7 +19,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
-import androidx.annotation.SuppressLint
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -135,9 +133,9 @@ class MainActivity : ComponentActivity() {
 
 data class UpcomingCollection(val bin: BinType, val date: LocalDate)
 
-@SuppressLint("NewApi")
+@Suppress("NewApi")
 fun generateUpcomingCollections(settingsManager: SettingsManager): List<UpcomingCollection> {
-    val today = LocalDate.now()
+    val today = java.time.LocalDate.now()
     return BinTypes.ALL_BINS
         .filter { settingsManager.isBinEnabled(it.id) }
         .map { bin -> UpcomingCollection(bin, nextDateForBin(bin, settingsManager, today)) }
@@ -427,10 +425,10 @@ private fun populateNativeAdView(
 private fun Context.dpToPx(dp: Int): Int =
     (dp * resources.displayMetrics.density).roundToInt()
 
-@SuppressLint("NewApi")
+@Suppress("NewApi")
 @Composable
 fun CollectionCard(collection: UpcomingCollection, isLandscape: Boolean = false) {
-    val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM")
+    val dateFormatter = java.time.format.DateTimeFormatter.ofPattern("EEEE\nd MMMM")
 
     val titleColor: Color =
         if (collection.bin.displayName.equals("Rubbish", ignoreCase = true)) {
