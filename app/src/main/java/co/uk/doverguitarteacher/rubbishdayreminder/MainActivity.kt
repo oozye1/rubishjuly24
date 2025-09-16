@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
+import androidx.annotation.SuppressLint
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -122,7 +124,7 @@ class MainActivity : ComponentActivity() {
             val alarmManager = getSystemService(AlarmManager::class.java)
             if (!alarmManager.canScheduleExactAlarms()) {
                 val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                    data = Uri.parse("package:$packageName")
+                    data = "package:$packageName".toUri()
                 }
                 startActivity(intent)
                 Toast.makeText(this, "Grant exact alarm permission then return to the app.", Toast.LENGTH_LONG).show()
@@ -133,6 +135,7 @@ class MainActivity : ComponentActivity() {
 
 data class UpcomingCollection(val bin: BinType, val date: LocalDate)
 
+@SuppressLint("NewApi")
 fun generateUpcomingCollections(settingsManager: SettingsManager): List<UpcomingCollection> {
     val today = LocalDate.now()
     return BinTypes.ALL_BINS
@@ -210,7 +213,9 @@ fun PortraitLayout(
             "Next Collections",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(24.dp))
 
@@ -334,7 +339,7 @@ fun NativeAdBanner(
             update = { adView ->
                 nativeAd?.let {
                     populateNativeAdView(
-                        adView as com.google.android.gms.ads.nativead.NativeAdView,
+                        adView,
                         it
                     )
                 }
@@ -422,6 +427,7 @@ private fun populateNativeAdView(
 private fun Context.dpToPx(dp: Int): Int =
     (dp * resources.displayMetrics.density).roundToInt()
 
+@SuppressLint("NewApi")
 @Composable
 fun CollectionCard(collection: UpcomingCollection, isLandscape: Boolean = false) {
     val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM")
@@ -463,13 +469,17 @@ fun CollectionCard(collection: UpcomingCollection, isLandscape: Boolean = false)
                 collection.bin.displayName,
                 fontSize = titleSize,
                 fontWeight = FontWeight.Bold,
-                color = titleColor
+                color = titleColor,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(spacerHeight))
             Text(
                 collection.date.format(dateFormatter),
                 fontSize = dateSize,
-                color = Color.White
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
